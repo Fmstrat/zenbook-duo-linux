@@ -17,6 +17,7 @@ A script to manage features on the Zenbook Duo.
 | Auto rotation | ✅ | |
 | Keyboard backlight when keyboard off | | ❌ |
 | Keyboard function keys (some work in BT mode) | | ❌ |
+| Pen and Touch Input on second screen (before input on second screen mapped to main screen only) | ✅ | |
 
 ## Tested on
 
