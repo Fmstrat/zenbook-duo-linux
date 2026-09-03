@@ -132,8 +132,15 @@ sys.exit(0)
 " > /tmp/duo/backlight.py
 fi
 
-WIFI_BEFORE=$(nmcli radio wifi)
-BLUETOOTH_BEFORE=$(rfkill -n -o SOFT list bluetooth |head -n1)
+if [ -f /tmp/duo/status ]; then
+    . /tmp/duo/status
+fi
+if [ -z "${WIFI_BEFORE}" ]; then
+    WIFI_BEFORE=$(nmcli radio wifi)
+fi
+if [ -z "${BLUETOOTH_BEFORE}" ]; then
+    BLUETOOTH_BEFORE=$(rfkill -n -o SOFT list bluetooth |head -n1)
+fi
 KEYBOARD_ATTACHED=false
 if [ -n "$(lsusb | grep 'Zenbook Duo Keyboard')" ]; then
     KEYBOARD_ATTACHED=true
@@ -204,24 +211,6 @@ function duo-watch-bluetooth() {
     done < <(gdbus monitor -y -d org.bluez | grep --line-buffered "'Powered':")
 }
 
-function duo-watch-lock() {
-    while read -r LINE; do
-        sleep 1
-        echo "$(date) - DEBUG - ${LINE}"
-        . /tmp/duo/status
-        if [ "${KEYBOARD_ATTACHED}" = true ]; then
-            if [[ "${LINE}" = *"<true>"* ]]; then
-                BLUETOOTH_BEFORE=unblocked
-            else
-                BLUETOOTH_BEFORE=blocked
-            fi
-            echo "$(date) - NETWORK - Bluetooth: ${BLUETOOTH_BEFORE}"
-            duo-set-status
-            duo-check-monitor
-        fi
-    done < <(gdbus monitor -y -d org.freedesktop.login1 | grep --line-buffered "LockedHint")
-}
-
 function duo-check-monitor() {
     . /tmp/duo/status
     KEYBOARD_ATTACHED=false
@@ -229,6 +218,7 @@ function duo-check-monitor() {
         KEYBOARD_ATTACHED=true
     fi
     MONITOR_COUNT=$(gdctl show | grep 'Logical monitor #' | wc -l)
+    EXTERNAL_MONITOR=$(gdctl show | grep -oE '(^|[^a-zA-Z])(DP|HDMI|DVI|VGA)-[0-9]+' | grep -oE '(DP|HDMI|DVI|VGA)-[0-9]+')
     duo-set-status
     echo "$(date) - MONITOR - WIFI before: ${WIFI_BEFORE}, Bluetooth before: ${BLUETOOTH_BEFORE}"
     echo "$(date) - MONITOR - Keyboard attached: ${KEYBOARD_ATTACHED}, Monitor count: ${MONITOR_COUNT}"
@@ -246,7 +236,9 @@ function duo-check-monitor() {
             echo "$(date) - MONITOR - Turning off Bluetooth"
             rfkill block bluetooth
         fi
-        if (( MONITOR_COUNT > 1 )) || (( MONITOR_COUNT == 0 )); then
+        if [ -n "${EXTERNAL_MONITOR}" ]; then
+            echo "$(date) - MONITOR - External monitor detected (${EXTERNAL_MONITOR}), skipping display auto-toggle"
+        elif (( MONITOR_COUNT > 1 )) || (( MONITOR_COUNT == 0 )); then
             echo "$(date) - MONITOR - Disabling bottom monitor"
             gdctl set --logical-monitor --primary --scale ${SCALE} --monitor eDP-1
             NEW_MONITOR_COUNT=$(gdctl show | grep 'Logical monitor #' | wc -l)
@@ -265,7 +257,9 @@ function duo-check-monitor() {
         fi
         echo "$(date) - MONITOR - Turning on Bluetooth"
         rfkill unblock bluetooth
-        if (( MONITOR_COUNT < 2 )); then
+        if [ -n "${EXTERNAL_MONITOR}" ]; then
+            echo "$(date) - MONITOR - External monitor detected (${EXTERNAL_MONITOR}), skipping display auto-toggle"
+        elif (( MONITOR_COUNT < 2 )); then
             echo "$(date) - MONITOR - Enabling bottom monitor"
             gdctl set --logical-monitor --primary --scale ${SCALE} --monitor eDP-1 --logical-monitor --scale ${SCALE} --monitor eDP-2 --below eDP-1
             NEW_MONITOR_COUNT=$(gdctl show | grep 'Logical monitor #' | wc -l)
