@@ -207,16 +207,8 @@ function duo-watch-bluetooth() {
 function duo-watch-lock() {
     while read -r LINE; do
         sleep 1
-        echo "$(date) - DEBUG - ${LINE}"
-        . /tmp/duo/status
-        if [ "${KEYBOARD_ATTACHED}" = true ]; then
-            if [[ "${LINE}" = *"<true>"* ]]; then
-                BLUETOOTH_BEFORE=unblocked
-            else
-                BLUETOOTH_BEFORE=blocked
-            fi
-            echo "$(date) - NETWORK - Bluetooth: ${BLUETOOTH_BEFORE}"
-            duo-set-status
+        if [[ "${LINE}" = *"<false>"* ]]; then
+            echo "$(date) - SESSION - Unlocked, rechecking monitor state"
             duo-check-monitor
         fi
     done < <(gdbus monitor -y -d org.freedesktop.login1 | grep --line-buffered "LockedHint")
@@ -357,6 +349,7 @@ function main() {
     duo-watch-rotate &
     duo-watch-display-backlight &
     duo-watch-wifi &
+    duo-watch-lock &
     duo-watch-bluetooth
 }
 
