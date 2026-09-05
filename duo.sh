@@ -132,8 +132,15 @@ sys.exit(0)
 " > /tmp/duo/backlight.py
 fi
 
-WIFI_BEFORE=$(nmcli radio wifi)
-BLUETOOTH_BEFORE=$(rfkill -n -o SOFT list bluetooth |head -n1)
+if [ -f /tmp/duo/status ]; then
+    . /tmp/duo/status
+fi
+if [ -z "${WIFI_BEFORE}" ]; then
+    WIFI_BEFORE=$(nmcli radio wifi)
+fi
+if [ -z "${BLUETOOTH_BEFORE}" ]; then
+    BLUETOOTH_BEFORE=$(rfkill -n -o SOFT list bluetooth |head -n1)
+fi
 KEYBOARD_ATTACHED=false
 if [ -n "$(lsusb | grep 'Zenbook Duo Keyboard')" ]; then
     KEYBOARD_ATTACHED=true
