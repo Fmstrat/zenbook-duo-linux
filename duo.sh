@@ -132,8 +132,15 @@ sys.exit(0)
 " > /tmp/duo/backlight.py
 fi
 
-WIFI_BEFORE=$(nmcli radio wifi)
-BLUETOOTH_BEFORE=$(rfkill -n -o SOFT list bluetooth |head -n1)
+if [ -f /tmp/duo/status ]; then
+    . /tmp/duo/status
+fi
+if [ -z "${WIFI_BEFORE}" ]; then
+    WIFI_BEFORE=$(nmcli radio wifi)
+fi
+if [ -z "${BLUETOOTH_BEFORE}" ]; then
+    BLUETOOTH_BEFORE=$(rfkill -n -o SOFT list bluetooth |head -n1)
+fi
 KEYBOARD_ATTACHED=false
 if [ -n "$(lsusb | grep 'Zenbook Duo Keyboard')" ]; then
     KEYBOARD_ATTACHED=true
@@ -207,16 +214,8 @@ function duo-watch-bluetooth() {
 function duo-watch-lock() {
     while read -r LINE; do
         sleep 1
-        echo "$(date) - DEBUG - ${LINE}"
-        . /tmp/duo/status
-        if [ "${KEYBOARD_ATTACHED}" = true ]; then
-            if [[ "${LINE}" = *"<true>"* ]]; then
-                BLUETOOTH_BEFORE=unblocked
-            else
-                BLUETOOTH_BEFORE=blocked
-            fi
-            echo "$(date) - NETWORK - Bluetooth: ${BLUETOOTH_BEFORE}"
-            duo-set-status
+        if [[ "${LINE}" = *"<false>"* ]]; then
+            echo "$(date) - SESSION - Unlocked, rechecking monitor state"
             duo-check-monitor
         fi
     done < <(gdbus monitor -y -d org.freedesktop.login1 | grep --line-buffered "LockedHint")
@@ -345,9 +344,8 @@ function duo-cli() {
 function duo-watch-rotate() {
     echo "$(date) - ROTATE - Watching"
     monitor-sensor --accel |
-        stdbuf -oL grep "Accelerometer orientation changed:" |
-        stdbuf -oL awk '{print $4}' |
-        xargs -I '{}' stdbuf -oL "$0" '{}' 2>/dev/null
+        grep --line-buffered -oP "Accelerometer orientation changed: \K\S+" |
+        xargs -I '{}' "$0" '{}' >/dev/null 2>&1
 }
 
 function main() {
@@ -357,6 +355,7 @@ function main() {
     duo-watch-rotate &
     duo-watch-display-backlight &
     duo-watch-wifi &
+    duo-watch-lock &
     duo-watch-bluetooth
 }
 
