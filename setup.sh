@@ -20,6 +20,7 @@ if [ "${DEV_MODE}" = false ]; then
         inotify-tools \
         usbutils \
         mutter-common-bin \
+        x11-xserver-utils \
         iio-sensor-proxy \
         python3-usb
     sudo mkdir -p /usr/local/bin
@@ -69,7 +70,6 @@ After=graphical-session.target
 ExecStartPre=/bin/sleep 3
 ExecStart=${INSTALL_LOCATION}
 Restart=no
-Environment=XDG_CURRENT_DESKTOP=GNOME
 
 [Install]
 WantedBy=default.target

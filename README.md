@@ -30,6 +30,21 @@ The following models and operating systems have been validated by users
 
 While I typicaly recommend Debian installs, and many items worked out of the box with `debian-backports`, Ubuntu 25.10 has so far proven to be the best option for compatibility of newer hardware, such as the Bluetooth module. Once Backports incorporates kernel 6.14, I may personally redo testing in Debian Bookworm.
 
+### Desktop environment support
+
+Display handling (panel toggle and auto-rotation) is detected and driven
+per-session: `gdctl` (GNOME/Mutter) is used when available, otherwise the
+script falls back to `xrandr`, which covers MATE and other X11-based
+desktops. This is re-detected on every run, so switching desktop
+environments at the login screen needs no reconfiguration — check
+`/tmp/duo/duo.log` for a `BACKEND - Selected: ...` line confirming which
+one was picked.
+
+The monitor-scale setting chosen during install only applies under the
+`gdctl`/GNOME backend. On MATE, scaling isn't applied by this script — use
+MATE's own interface scaling factor (Appearance settings, or
+`gsettings set org.mate.interface window-scaling-factor <1 or 2>`) instead.
+
 ## Install
 
 Run the setup script below, choose a default keyboard backlight level of 0 (off) to 3 (high), and a default resolution scale.
