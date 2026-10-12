@@ -14,8 +14,12 @@ if [ "${1}" = "--dev-mode" ]; then
 fi
 
 if [ "${DEV_MODE}" = false ]; then
-    read -p "What would you like to use for the default keyboard backlight brightness [0-3]? " DEFAULT_BRIGHTNESS
+    read -p "What would you like to use for the default keyboard backlight brightness [0-3]? " DEFAULT_BACKLIGHT
     read -p "What would you like to use for monitor scale (1 = 100%, 1.5 = 150%, 2=200%) [1-2]? " DEFAULT_SCALE
+    # Pressing Enter keeps the default (1) rather than writing an empty value
+    # into the installed script, which would break the backlight/scale calls.
+    DEFAULT_BACKLIGHT=${DEFAULT_BACKLIGHT:-1}
+    DEFAULT_SCALE=${DEFAULT_SCALE:-1}
     sudo apt install -y \
         inotify-tools \
         usbutils \

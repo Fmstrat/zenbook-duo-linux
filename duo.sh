@@ -281,12 +281,66 @@ function duo-set-status() {
 }
 duo-set-status
 
+# Returns success when this instance belongs to GDM's login screen. The user
+# service is enabled globally on purpose so panel toggling and rotation also
+# work at the login screen, but the greeter's dynamic user (gdm-greeter,
+# uid 605xx) has no sudoers entry and no notification daemon, so those calls
+# can only fail there. Detected by logind session class rather than username
+# because GDM allocates several greeter users. Cached in IS_GREETER; main()
+# computes it before forking the watchers so they inherit the result.
+function duo-is-greeter() {
+    if [ -z "${IS_GREETER}" ]; then
+        IS_GREETER=false
+        local S
+        # Root (system-sleep hook, boot unit) has no logind user and falls
+        # through as non-greeter; errors are discarded for that case.
+        for S in $(loginctl show-user "$(id -u)" -p Sessions --value 2>/dev/null); do
+            if [ "$(loginctl show-session "${S}" -p Class --value 2>/dev/null)" = greeter ]; then
+                IS_GREETER=true
+            fi
+        done
+    fi
+    [ "${IS_GREETER}" = true ]
+}
+
+# Sets the keyboard backlight level (0-3). Skipped at the login screen, where
+# the sudoers rule installed by setup.sh doesn't apply.
 function duo-set-kb-backlight() {
+    if duo-is-greeter; then
+        return 0
+    fi
     /usr/bin/sudo ${PYTHON3} /tmp/duo/backlight.py ${1} >/dev/null
 }
 
+# Shows a short desktop notification. Skipped at the login screen, which has
+# no notification daemon for notify-send to connect to.
+function duo-notify() {
+    if duo-is-greeter; then
+        return 0
+    fi
+    notify-send -a "Zenbook Duo" -t 1000 --hint=int:transient:1 -i "preferences-desktop-display" "${1}"
+}
+
+# Turns the WiFi radio on if NetworkManager's polkit policy allows it for this
+# session right now. That can change while running: the login-screen instance
+# is allowed while the greeter is the active session, but is refused once the
+# user's session takes over and before GDM stops the greeter.
+function duo-wifi-on() {
+    if nmcli -t -f PERMISSION,VALUE general permissions 2>/dev/null |
+            grep -qx 'org.freedesktop.NetworkManager.enable-disable-wifi:yes'; then
+        echo "$(date) - MONITOR - Turning on WIFI"
+        nmcli radio wifi on
+    fi
+}
+
 BRIGHTNESS=0
+# Mirrors the top panel's brightness onto the bottom panel while the keyboard
+# is detached. Skipped at the login screen: the sudo tee rule from setup.sh
+# only covers the installing user.
 function duo-sync-display-backlight() {
+    if duo-is-greeter; then
+        return 0
+    fi
     . /tmp/duo/status
     if [ "${KEYBOARD_ATTACHED}" = false ]; then
         CUR_BRIGHTNESS=$(cat /sys/class/backlight/intel_backlight/brightness)
@@ -386,8 +440,7 @@ function duo-check-monitor() {
         echo "$(date) - MONITOR - Keyboard attached"
         duo-set-kb-backlight ${DEFAULT_BACKLIGHT}
         if [ "${WIFI_BEFORE}" = enabled ]; then
-            echo "$(date) - MONITOR - Turning on WIFI"
-            nmcli radio wifi on
+            duo-wifi-on
         fi
         if [ "${BLUETOOTH_BEFORE}" = unblocked ]; then
             echo "$(date) - MONITOR - Turning on Bluetooth"
@@ -405,13 +458,12 @@ function duo-check-monitor() {
             else
                 MESSAGE="ERROR: Bottom display still on"
             fi
-            notify-send -a "Zenbook Duo" -t 1000 --hint=int:transient:1 -i "preferences-desktop-display" "${MESSAGE}"
+            duo-notify "${MESSAGE}"
         fi
     else
         echo "$(date) - MONITOR - Keyboard detached"
         if [ "${WIFI_BEFORE}" = enabled ]; then
-            echo "$(date) - MONITOR - Turning on WIFI"
-            nmcli radio wifi on
+            duo-wifi-on
         fi
         echo "$(date) - MONITOR - Turning on Bluetooth"
         rfkill unblock bluetooth
@@ -424,7 +476,7 @@ function duo-check-monitor() {
             else
                 MESSAGE="ERROR: Bottom display still off"
             fi
-            notify-send -a "Zenbook Duo" -t 1000 --hint=int:transient:1 -i "preferences-desktop-display" "${MESSAGE}"
+            duo-notify "${MESSAGE}"
         fi
     fi
 }
@@ -518,6 +570,10 @@ function duo-watch-rotate() {
 }
 
 function main() {
+    # Resolve once here so the backgrounded watchers inherit the cached value.
+    if duo-is-greeter; then
+        echo "$(date) - SESSION - Login screen instance: keyboard backlight, bottom-panel brightness sync and notifications are skipped"
+    fi
     duo-set-kb-backlight ${DEFAULT_BACKLIGHT}
     duo-check-monitor
     duo-watch-monitor &
